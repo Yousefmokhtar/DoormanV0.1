@@ -1,0 +1,56 @@
+  - platform: template
+    name: "Relay Counter"
+    id: select_relay_increment
+    min_value: 0
+    max_value: 7
+    step: 1
+    initial_value: 0
+    optimistic: true
+    on_value: 
+      then:
+        - rtttl.play: 'OK:d=8,o=5,b=140:g6'
+        - script.execute: control_relay_select
+  - platform: template
+    name: "Select Relay toggle"
+    id: select_relay_toggle
+    min_value: 0
+    max_value: 7
+    step: 1
+    initial_value: 0
+    optimistic: true
+    on_value:
+      then:
+        - script.execute: control_relay_toggle
+  - platform: template
+    name: "Select Relay on"
+    id: select_relay_on
+    min_value: 0
+    max_value: 7
+    step: 1
+    initial_value: 0
+    optimistic: true
+    on_value:
+      then:
+        - script.execute: control_relay_on
+  - platform: template
+    name: "Select Relay off"
+    id: select_relay_off
+    min_value: 0
+    max_value: 7
+    step: 1
+    initial_value: 0
+    optimistic: true
+    on_value:
+      then:
+        - script.execute: control_relay_off
+  - platform: template
+    name: "Select Relay"
+    id: select_relay
+    min_value: 0
+    max_value: 7
+    step: 1
+    initial_value: 1
+    optimistic: true
+    on_value:
+      then:
+        - script.execute: control_relay_select

@@ -1,0 +1,101 @@
+  id: ble1
+  secret_passcode: changeme
+#  security_mode: hotp
+  services:
+    - uuid128: [0x90, 0x9e, 0x93, 0x7a, 0xe8, 0x26, 0x11, 0xee, 0xbd, 0x3d, 0x02, 0x42, 0xac, 0x12, 0x00, 0x00]
+      characteristics:
+        - uuid128: [0x90, 0x9e, 0x93, 0x7a, 0xe8, 0x26, 0x11, 0xee, 0xbd, 0x3d, 0x02, 0x42, 0xac, 0x12, 0x00, 0x06]
+          permissions: ["read", "write", "notify"]
+
+    # # Define a service with a 16-bit UUID
+    # - uuid: 0x180A  # Device Information Service
+    #   characteristics:
+    #     # Characteristic with read and notify permissions
+    #     - uuid: 0x2A29  # Manufacturer Name String
+    #       permissions:
+    #         - read
+    #         - notify
+    #     # Characteristic with write permission
+    #     - uuid: 0x2A24  # Model Number String
+    #       permissions:
+    #         - write
+
+    # Define a service with a 128-bit UUID
+    - uuid128: [0x90, 0x9e, 0x93, 0x7a, 0xe8, 0x26, 0x11, 0xee, 0xbd, 0x3d, 0x02, 0x42, 0xac, 0x12, 0x00, 0x00]
+      characteristics:
+        # Characteristic with read, write, and notify permissions
+        - uuid128: [0x90, 0x9e, 0x93, 0x7a, 0xe8, 0x26, 0x11, 0xee, 0xbd, 0x3d, 0x02, 0x42, 0xac, 0x12, 0x00, 0x06]
+          permissions:
+            - read
+            - write
+            - notify
+  on_client_connected:
+    then:
+      - lambda: |-
+          ESP_LOGD("BLE CONNECTED", "BLE Client Connected, MAC: %s", mac.c_str());     
+          id(ble_client_mac).state=mac.c_str();
+          id(connected_remote_mac)=mac.c_str();
+
+  
+      - text_sensor.template.publish:
+          id: ble_client_mac
+          state: !lambda 'return mac.c_str();'
+      
+
+  on_pinpad_accepted:
+    - logger.log: "Rad! Correct pin was given!"
+  on_pinpad_rejected:
+    - logger.log: "Bummer! Incorrect pin was given."
+  on_user_selected:
+    - logger.log: "Bummer! Incorrect pin was given."
+  on_user_command_received:
+    - logger.log: "========== Command Received.  _________________________________________=================================="
+    
+    - lambda: |-
+        char first_char = cmd[0]-48;
+        char second_char = cmd[1]-48;
+        //ESP_LOGD("ble_SENSE", " -RRRRRRR Received:    %s  from MAC: %s", cmd.c_str(), mac.c_str());
+        
+        if(first_char==9 && second_char==9)
+          id(reboot_device).turn_on();
+        
+        if (mac.c_str()!=id(stored_remote_mac))
+        {
+          ESP_LOGD("ble_SENSE", " -MAC REFUSED:    %s  but remote MAC is: %s", mac.c_str() ,id(stored_remote_mac).c_str() );
+          return;
+        }
+
+        ESP_LOGD("ble_adv", " _CMD_______________   - %d",first_char);
+        ESP_LOGD("ble_adv", " _OPTION____________   - %d",second_char);
+ 
+        ESP_LOGD("ble_adv", " _OPTION__1__________   - %d",second_char);
+        
+        if (second_char == 0) {
+          id(relay_3).toggle();
+        } else if (second_char == 1) {
+          id(relay_2).toggle();
+        } else if (second_char == 2) {
+          id(relay_1).toggle();
+        } else if (second_char == 3) {
+          id(relay_0).toggle();
+        } else if (second_char == 4) {
+          id(relay_4).toggle();
+        } else if (second_char == 5) {
+          id(relay_5).toggle();
+        } else if (second_char == 6) {
+          id(relay_6).toggle();
+        } else if (second_char == 7) {
+          id(relay_7).toggle();
+        } else if (second_char == 8) {
+          id(relay_0).turn_off();
+          id(relay_1).turn_off();
+          id(relay_2).turn_off();
+          id(relay_3).turn_off();
+          id(relay_4).turn_off();
+          id(relay_5).turn_off();
+          id(relay_6).turn_off();
+          id(relay_7).turn_off();
+        } else if (second_char == 9) {
+          id(OPTO_1).turn_on();
+        }            
+ 

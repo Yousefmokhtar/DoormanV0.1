@@ -1,0 +1,14 @@
+- platform: gpio
+  name: "Light ${id}"
+  restore_mode: RESTORE_DEFAULT_OFF
+  pin:
+    sn74hc595: sn74hc595_leds
+    # Use pin number ${id}
+    number: ${id}
+    inverted: false
+  id: Led_${id}
+  inverted: false
+  on_turn_on:
+    - logger.log: "Switch Turned On!"
+  on_turn_off:
+    - logger.log: "Switch Turned Off!"

@@ -1,0 +1,80 @@
+# my_globals.yaml
+  - id: stored_remote_mac
+    type: std::string
+    restore_value: True
+ 
+  - id: connected_remote_mac
+    type: std::string
+    restore_value: false
+
+  - id: has_rebooted
+    type: bool
+    restore_value: true
+    initial_value: 'false'
+
+
+  
+  - id: programming_mode
+    type: bool
+    initial_value: 'false'
+    #restore_value: yes
+  
+  - id: selected_touch
+    type: int
+    initial_value: '-1'
+
+  - id: selected_relay0
+    type: int
+    restore_value: true
+    initial_value: '0'
+
+  - id: selected_relay1
+    type: int
+    restore_value: true
+    initial_value: '1'
+  
+  - id: selected_relay2
+    type: int
+    restore_value: true
+    initial_value: '2'
+  
+  - id: selected_relay3
+    type: int
+    restore_value: true
+    initial_value: '3'
+  
+  - id: selected_relay4
+    type: int
+    restore_value: true
+    initial_value: '4'
+  
+  - id: selected_relay5
+    type: int
+    restore_value: true
+    initial_value: '5'
+  
+  - id: selected_relay6
+    type: int
+    restore_value: true
+    initial_value: '6'
+  
+  - id: selected_relay7
+    type: int
+    restore_value: true
+    initial_value: '7'
+  
+  - id: tag_text
+    type: std::string
+    restore_value: yes
+    initial_value: '"Default Text"'
+
+
+
+
+
+
+
+
+
+
+

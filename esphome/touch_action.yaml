@@ -1,0 +1,60 @@
+platform: gpio
+name: "SN74HC165 Pin #${id}"
+filters:
+    - delayed_on: 100ms 
+pin:
+    sn74hc165: touch_sensors
+    # Use pin number ${id}
+    number: ${id}
+    inverted: false
+id: touch_${id}
+on_release:
+    then:
+      - if: 
+          condition:
+            lambda: 'return id(programming_mode)&&(id(selected_touch)==${id});'
+          then:
+            - number.operation:
+                id: select_relay_increment
+                operation: Increment
+                cycle: true
+
+            - globals.set: 
+                id: selected_relay${id}
+                value: !lambda return id(select_relay_increment).state;
+
+          else:
+            - logger.log: "Button ${id} !" # operation mode running
+            - switch.toggle: Led_${id}
+            - rtttl.play: 'Click:d=8,o=5,b=400:c'
+            - number.set: 
+                  id: select_relay_toggle
+                  value: !lambda return (id(selected_relay${id}));
+                
+on_multi_click:
+    - timing:
+        - ON for at least 1s
+      then:
+        - if: 
+            condition:
+              lambda: 'return id(programming_mode);'
+            then:
+              - if:
+                  condition:
+                    lambda: 'return (id(selected_touch)==${id});' # it is already selected the same touch
+                  then:
+                    - globals.set: #save selected Relay
+                        id: selected_relay${id}
+                        value: !lambda return id(select_relay_increment).state;
+                    - rtttl.play: 'Saved:d=4,o=5,b=120:c,e,g,c6'
+                    - globals.set:
+                        id: selected_touch
+                        value: "-1"
+                    - logger.log: "Touch Button saved >>> ${id} "                      
+
+                  else:  # start Programming This touch key
+                    - globals.set:
+                        id: selected_touch
+                        value: "${id}"
+                    - rtttl.play: 'Selected:d=16,o=5,b=120:c'
+                    - logger.log: "Touch Button Selected! ${id} "

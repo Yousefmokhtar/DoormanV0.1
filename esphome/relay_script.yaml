@@ -1,0 +1,105 @@
+  - id: blink_leds
+    then:
+      - repeat:
+          count: 60
+          then:
+            - switch.toggle: Led_1
+            - switch.toggle: Led_2
+            - switch.toggle: Led_3
+            - switch.toggle: Led_4
+            - switch.toggle: Led_5
+            - switch.toggle: Led_6
+            - switch.toggle: Led_7
+            - switch.toggle: Led_0
+            - delay: 500ms
+            
+  - id: control_relay_on
+    then:
+
+      - lambda: |-
+          if (id(select_relay_on).state == 1) {
+            id(relay_1).turn_on();
+          } else if (id(select_relay_on).state == 2) {
+            id(relay_2).turn_on();
+          } else if (id(select_relay_on).state == 3) {
+            id(relay_3).turn_on();
+          } else if (id(select_relay_on).state == 4) {
+            id(relay_4).turn_on();
+          } else if (id(select_relay_on).state == 5) {
+            id(relay_5).turn_on();
+          } else if (id(select_relay_on).state == 6) {
+            id(relay_6).turn_on();
+          } else if (id(select_relay_on).state == 7) {
+            id(relay_7).turn_on();
+          } else if (id(select_relay_on).state == 0) {
+            id(relay_0).turn_on();
+          }
+  - id: control_relay_off
+    then:
+      - lambda: |-
+          if (id(select_relay_off).state == 1) {
+            id(relay_1).turn_off();
+          } else if (id(select_relay_off).state == 2) {
+            id(relay_2).turn_off();
+          } else if (id(select_relay_off).state == 3) {
+            id(relay_3).turn_off();
+          } else if (id(select_relay_off).state == 4) {
+            id(relay_4).turn_off();
+          } else if (id(select_relay_off).state == 5) {
+            id(relay_5).turn_off();
+          } else if (id(select_relay_off).state == 6) {
+            id(relay_6).turn_off();
+          } else if (id(select_relay_off).state == 7) {
+            id(relay_7).turn_off();
+          } else if (id(select_relay_off).state == 0) {
+            id(relay_0).turn_off();
+          }          
+  - id: control_relay_toggle
+    then:
+      - lambda: |-
+          if (id(select_relay_toggle).state == 1) {
+            id(relay_1).toggle();
+          } else if (id(select_relay_toggle).state == 2) {
+            id(relay_2).toggle();
+          } else if (id(select_relay_toggle).state == 3) {
+            id(relay_3).toggle();
+          } else if (id(select_relay_toggle).state == 4) {
+            id(relay_4).toggle();
+          } else if (id(select_relay_toggle).state == 5) {
+            id(relay_5).toggle();
+          } else if (id(select_relay_toggle).state == 6) {
+            id(relay_6).toggle();
+          } else if (id(select_relay_toggle).state == 7) {
+            id(relay_7).toggle();
+          } else if (id(select_relay_toggle).state == 0) {
+            id(relay_0).toggle();
+          }                
+  - id: control_relay_select
+    then:
+      - switch.turn_off: relay_0
+      - switch.turn_off: relay_1
+      - switch.turn_off: relay_2
+      - switch.turn_off: relay_3
+      - switch.turn_off: relay_4
+      - switch.turn_off: relay_5
+      - switch.turn_off: relay_6
+      - switch.turn_off: relay_7    
+      - lambda: |-
+          if (id(select_relay_increment).state == 1) {
+            id(relay_1).turn_on();
+          } else if (id(select_relay_increment).state == 2) {
+            id(relay_2).turn_on();
+          } else if (id(select_relay_increment).state == 3) {
+            id(relay_3).turn_on();
+          } else if (id(select_relay_increment).state == 4) {
+            id(relay_4).turn_on();
+          } else if (id(select_relay_increment).state == 5) {
+            id(relay_5).turn_on();
+          } else if (id(select_relay_increment).state == 6) {
+            id(relay_6).turn_on();
+          } else if (id(select_relay_increment).state == 7) {
+            id(relay_7).turn_on();
+          } else if (id(select_relay_increment).state == 0) {
+            id(relay_0).turn_on();
+          }
+

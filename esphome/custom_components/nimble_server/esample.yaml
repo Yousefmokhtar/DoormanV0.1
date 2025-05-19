@@ -1,0 +1,1954 @@
+#VERSION  1.0.6.1
+#PINOUTS
+#39 ADC  MIC
+#25 PWM  SPK
+
+
+#12   SER-LED-DS
+#32   SCK-LED-CLOCK
+#33   RCK-LED -LATCH                         TOUCH DATA
+
+
+#35   SER OUT-DS -touch
+#26   CLK-touch
+#27   SH/LD_-touch
+
+
+#23 BUZZER
+
+
+#21 SDA  NFC/RTC
+#22 SCL  NFC/RTC
+
+
+#2 OPTO
+
+
+#19 MISO -DS
+#18 CLK  -CLOCK           RELAYS
+#5  CS -LATCH
+
+
+#13
+#17 TX2   MODBUS
+#16 RX2
+
+
+#36 BTN
+
+esphome:
+ # platform: esp32
+ # board: esp32dev
+  name: doorman1-0-6-dwa-ble #"doorman1-0-6-dwa-clear-fix"
+  friendly_name: doorman1-0-6-dwa-ble #doorman1-0-6-dwa-clear-fix
+  # libraries: 
+  #- h2zero/esp-nimble-cpp@^2.1.0
+    # - espressif/esp-nimble
+
+#    - nkolban/ESP32 BLE Arduino
+#    - h2zero/NimBLE-Arduino
+
+  includes: 
+    - custom_components/custom_card_storage.h
+    #- custom_components/custom_ble_service.h
+    # - custom_components/nimble_server/nimble_server.h
+  on_boot:
+    then:
+      - ds1307.read_time:
+      - lambda: |-
+          id(cards).clear();  // Clear all stored cards
+          id(cards_starts).clear();  // Clear all start validity periods
+          id(cards_ends).clear();  // Clear all end validity periods      
+          load_cards_from_storage();
+          ESP_LOGD("boot", "Loaded %d cards from storage", id(cards).size());
+  
+        
+      - lambda: |-
+          // Check the last reboot reason
+          if (esp_reset_reason() == ESP_RST_POWERON) {
+            // If the reboot reason is a power-on reset, trigger a reboot
+            ESP_LOGD("main", "Power-on reset detected. Rebooting...");
+            //id(main_rtttl_component).play("MASH:d=8,o=5,b=140:4a,4g,f#,g,p,4a,4g,f#,g,p");
+            sleep(5000);
+            id(reboot_device).turn_on();
+            
+          } else {
+            //id(main_rtttl_component).play("Granted:d=8,o=5,b=140:g,p");
+            ESP_LOGD("main", "Reboot reason is not power-on. No action taken.");
+          }
+
+ 
+
+esp32:
+  board: esp32doit-devkit-v1
+  framework:
+    type: esp-idf
+    version: latest
+    sdkconfig_options:
+      CONFIG_BT_ENABLED: y
+      CONFIG_BTDM_CTRL_MODE_BLE_ONLY: y
+      CONFIG_BTDM_CTRL_MODE_BR_EDR_ONLY: n
+      CONFIG_BTDM_CTRL_MODE_BTDM: n
+      CONFIG_BT_BLUEDROID_ENABLED: n
+      CONFIG_BT_NIMBLE_ENABLED: y
+      CONFIG_EXAMPLE_IO_TYPE: y
+      CONFIG_BLE_SM_IO_CAP_NO_IO: y
+      MYNEWT_VAL_BLE_STORE_MAX_CSFCS: y
+
+  flash_size: 4MB
+  variant: ESP32
+  
+
+ 
+#external_components:
+#  - source: github://wifwucite/esphome-ble-controller
+  
+#i2s_audio:
+#  i2s_lrclk_pin: GPIO9
+#  i2s_bclk_pin: GPIO10
+
+
+#microphone:
+#- platform: i2s_audio
+#  id: adc_mic
+#  adc_type: internal
+#  adc_pin: GPIO39
+# Example configuration entry
+
+#media_player:
+#- platform: i2s_audio
+#  name: ESPHome I2S Media Player
+#  dac_type: internal
+#  mode: left
+#  id: dac_mp
+ 
+
+#voice_assistant:
+#  microphone: adc_mic
+#  media_player: dac_mp
+preferences:
+ # flash_write_interval: 10sec
+
+globals:
+  - id: stored_remote_mac
+    type: std::string
+    restore_value: True
+ 
+  - id: connected_remote_mac
+    type: std::string
+    restore_value: false
+
+  - id: has_rebooted
+    type: bool
+    restore_value: true
+    initial_value: 'false'
+
+  - id: cards_ids
+    type: std::string
+    restore_value: yes
+    max_restore_data_length: 254
+    
+  - id: cards_starts
+    type: std::string 
+    restore_value: yes
+    max_restore_data_length: 254
+    
+  - id: cards_ends
+    type: std::string
+    restore_value: yes
+    max_restore_data_length: 254
+
+  - id: cards
+    type: std::vector<std::tuple<std::string, std::string, std::string>>
+    #restore_value: yes
+
+  - id: logs
+    type: std::vector<std::tuple<std::string, std::string, int>>
+  - id: programming_mode
+    type: bool
+    initial_value: 'false'
+    #restore_value: yes
+  
+  - id: selected_touch
+    type: int
+    initial_value: '-1'
+
+  - id: selected_relay0
+    type: int
+    restore_value: true
+    initial_value: '0'
+
+  - id: selected_relay1
+    type: int
+    restore_value: true
+    initial_value: '1'
+  - id: selected_relay2
+    type: int
+    restore_value: true
+    initial_value: '2'
+  - id: selected_relay3
+    type: int
+    restore_value: true
+    initial_value: '3'
+  - id: selected_relay4
+    type: int
+    restore_value: true
+    initial_value: '4'
+  - id: selected_relay5
+    type: int
+    restore_value: true
+    initial_value: '5'
+  - id: selected_relay6
+    type: int
+    restore_value: true
+    initial_value: '6'
+  - id: selected_relay7
+    type: int
+    restore_value: true
+    initial_value: '7'
+  - id: tag_text
+    type: std::string
+    restore_value: yes
+    initial_value: '"Default Text"'
+ 
+
+ 
+button:
+  - platform: template
+    name: "Remove All Cards"
+    id: remove_all_cards
+    on_press:
+      then:
+        - logger.log: "Removing all cards and their validity..."
+        - lambda: |-
+            id(cards).clear();  // Clear all stored cards
+            id(cards_starts).clear();  // Clear all start validity periods
+            id(cards_ends).clear();  // Clear all end validity periods
+            update_cards_storage();  // Update the storage to reflect the changes
+            ESP_LOGD("remove_all_cards", "All cards and their validity periods have been removed.");
+ 
+ 
+        
+  - platform: template
+    name: Remote Add
+    id: remote_add
+    on_press:
+      then: 
+
+        - lambda: id(stored_remote_mac)=id(connected_remote_mac);
+        - logger.log: "remote mac address added"
+        - logger.log: id(ble_client_mac).state
+ 
+
+ 
+  - platform: template
+    name: FIRMWARE Update
+    id: firmware_update
+    on_press:
+      then:
+        - logger.log: "OTA Update triggered..." 
+        - ota.http_request.flash:
+            url: http://homeassistant.local/uploads/doorman.ota.bin
+            md5_url: http://homeassistant.local/uploads/doorman.ota.md5
+            #md5: ca2c308baf2a04e70e9c610bc0eacdd5
+
+        - logger.log: "This message should be not displayed because the device reboots"
+#============================ MODBUS CONTROLLER ==================================================
+# Example configuration entry
+#uart:
+#  id: modbus_serial
+#  rx_pin: GPIO16 #RXD2
+#  tx_pin: GPIO17 #TXD2
+#  baud_rate: 9600
+#  stop_bits: 1
+#  data_bits: 8
+#modbus:
+#  flow_control_pin: GPIO13
+#  uart_id: modbus_serial
+
+#modbus_controller:
+#- id: sdm
+#  update_interval: 31s
+#  address: 0x1
+#  command_throttle: 150ms
+#  setup_priority: -10  
+
+# Example configuration entry
+
+web_server:
+  port: 80
+  auth:
+    username: admin
+    password: WONDXLLC
+  version: 3
+  local: True
+  include_internal: false
+  log: True  
+  
+
+ 
+  
+#================================ NFC READER =====================================================
+
+pn532_i2c:
+  id: pn532_1
+  update_interval: 2500ms
+
+  on_tag:
+    then:
+      - lambda: |-
+          bool notfound=true;
+          std::string card_id = x;
+          auto now = id(sntp_time).now().timestamp;
+          for (const auto& card : id(cards)) 
+          {
+            if (std::get<0>(card) == card_id) 
+            {
+              id(OPTO_1).turn_on();
+              id(logs).push_back({"Access granted", card_id, now});
+              id(door_access_state).state=true;
+              ESP_LOGD("get_logs", "y y y y Card ACCEPTED :)");
+              notfound=false;
+              id(door_access_state).state=true;
+              break;
+            }
+          }
+          if(notfound)
+            {ESP_LOGD("get_logs", "x x x x Card NOT FOUND  :(  " );
+            ESP_LOGD("get_logs", "x    Cards Saved   %d  ", id(cards).size());}
+      - logger.log: cards.End
+      - rtttl.play: 'MASH:d=8,o=5,b=140:f#,g,p'
+      - lambda: id(rfid_tag).state=x;
+      
+text_sensor:
+
+
+
+  - platform: template
+    name: "Last Reset Reason"
+    lambda: |-
+      // Use ESP-IDF's esp_reset_reason() function to get the reset reason
+      esp_reset_reason_t reason = esp_reset_reason();
+
+      // Return the reset reason as a string
+      switch (reason) {
+        case ESP_RST_POWERON:
+          return {"Power-on reset"};
+        case ESP_RST_EXT:
+          return {"External reset"};
+        case ESP_RST_SW:
+          return {"Software reset"};
+        case ESP_RST_PANIC:
+          return {"Panic reset"};
+        case ESP_RST_INT_WDT:
+          return {"Interrupt watchdog reset"};
+        case ESP_RST_TASK_WDT:
+          return {"Task watchdog reset"};
+        case ESP_RST_WDT:
+          return {"Other watchdog reset"};
+        case ESP_RST_DEEPSLEEP:
+          return {"Deep sleep reset"};
+        case ESP_RST_BROWNOUT:
+          return {"Brownout reset"};
+        case ESP_RST_SDIO:
+          return {"SDIO reset"};
+        default:
+          return {"Unknown reset reason"};
+      }  
+     
+
+
+  - platform: template
+    name: "Remote Mac Address"
+    id: ble_client_mac
+
+  - platform: template
+    name: "Device Info"
+    id: Identify_device
+
+  - platform: template
+    name: cards_json_string
+    id: cards_json_string
+    lambda: return(id(cards_ids));
+
+  - platform: template
+    name: "Current Device Time"
+    update_interval: 60s
+    lambda: |-
+      char time_str[20];
+      snprintf(time_str, 20, "%02d/%02d/%04d %02d:%02d:%02d",id(sntp_time).now().day_of_month,id(sntp_time).now().month,id(sntp_time).now().year, id(sntp_time).now().hour, id(sntp_time).now().minute, id(sntp_time).now().second);
+      return {time_str}; 
+
+  - platform: wifi_info
+    ip_address:
+      name: ESP IP Address
+      address_0:
+        name: ESP IP Address 0
+      address_1:
+        name: ESP IP Address 1
+      address_2:
+        name: ESP IP Address 2
+      address_3:
+        name: ESP IP Address 3
+      address_4:
+        name: ESP IP Address 4
+    ssid:
+      name: ESP Connected SSID
+    bssid:
+      name: ESP Connected BSSID
+    mac_address:
+      name: ESP Mac Wifi Address
+    scan_results:
+      name: ESP Latest Scan Results
+    dns_address:
+      name: ESP DNS Address
+        
+  - platform: template
+    name: "PAIRING PIN"
+    id: ble_pin
+  - platform: template
+    name: "rfid_tag"
+    id: rfid_tag
+
+
+
+          
+      
+#====================================== Touch buttons =============================================
+binary_sensor:
+
+
+#################################
+- platform: template
+  name: "door_access_state"
+  id: door_access_state
+################################# TOUCH SENSORS #########################################
+
+- platform: gpio
+  name: "SN74HC165 Pin #0"
+  filters:
+    - delayed_on: 100ms 
+  pin:
+    sn74hc165: touch_sensors
+    # Use pin number 0
+    number: 0
+    inverted: false
+  id: touch_0
+  on_release:
+    then:
+      - if: 
+          condition:
+            lambda: 'return (id(programming_mode)&&(id(selected_touch)==0));'
+          then:
+            - number.operation:
+                id: select_relay_increment
+                operation: Increment
+                cycle: true
+
+            - globals.set: 
+                id: selected_relay0
+                value: !lambda return id(select_relay_increment).state;
+
+          else:
+            - logger.log: "Button 0 !" # operation mode running
+            - switch.toggle: Led_0
+            - if: 
+                condition: 
+                  switch.is_on: Led_0
+                
+                then:
+                  - rtttl.play: 'Click:d=8,o=5,b=400:c'
+
+                  - number.set: 
+                      id: select_relay_on
+                      value: !lambda return (id(selected_relay0));
+                else: 
+                  - rtttl.play: 'Click:d=8,o=5,b=400:c'
+                  - number.set: 
+                      id: select_relay_off
+                      value: !lambda return (id(selected_relay0));
+
+
+                
+  on_multi_click:
+    - timing:
+        - ON for at least 1s
+      then:
+        - if: 
+            condition:
+              lambda: 'return id(programming_mode);'
+            then:
+              - if:
+                  condition:
+                    lambda: 'return (id(selected_touch)==0);' # it is already selected the same touch
+                  then:
+                    - globals.set: #save selected Relay
+                        id: selected_relay0
+                        value: !lambda return id(select_relay_increment).state;
+                    - rtttl.play: 'Saved:d=4,o=5,b=120:c,e,g,c6'
+                    - globals.set:
+                        id: selected_touch
+                        value: "-1"
+                    - logger.log: "Touch Button saved >>> 0 "                      
+
+                  else:  # start Programming This touch key
+                    - globals.set:
+                        id: selected_touch
+                        value: "0"
+                    - rtttl.play: 'Selected:d=16,o=5,b=120:c'
+                    - logger.log: "Touch Button Selected! 0 "
+
+
+
+- platform: gpio
+  name: "SN74HC165 Pin #1"
+  filters:
+    - delayed_on: 100ms 
+  pin:
+    sn74hc165: touch_sensors
+    # Use pin number 1
+    number: 1
+    inverted: false
+  id: touch_1
+  on_release:
+    then:
+      - if: 
+          condition:
+            lambda: 'return (id(programming_mode)&&(id(selected_touch)==1));'
+          then:
+            - number.operation:
+                id: select_relay_increment
+                operation: Increment
+                cycle: true
+
+            - globals.set: 
+                id: selected_relay1
+                value: !lambda return id(select_relay_increment).state;
+
+          else:
+            - logger.log: "Button 1 !" # operation mode running
+            - switch.toggle: Led_1
+            - if: 
+                condition: 
+                  switch.is_on: Led_1
+                then:
+                  - rtttl.play: 'Click:d=8,o=5,b=400:c'
+                  - number.set: 
+                      id: select_relay_on
+                      value: !lambda return (id(selected_relay1));
+                else: 
+                  - rtttl.play: 'Click:d=8,o=5,b=400:c'
+                  - number.set: 
+                      id: select_relay_off
+                      value: !lambda return (id(selected_relay1));
+  on_multi_click:
+    - timing:
+        - ON for at least 1s
+      then:
+        - if: 
+            condition:
+              lambda: 'return id(programming_mode);'
+            then:
+              - if:
+                  condition:
+                    lambda: 'return (id(selected_touch)==1);' # it is already selected the same touch
+                  then:
+                    - globals.set: #save selected Relay
+                        id: selected_relay1
+                        value: !lambda return id(select_relay_increment).state;
+                    - rtttl.play: 'Saved:d=4,o=5,b=120:c,e,g,c6'
+                    - globals.set:
+                        id: selected_touch
+                        value: "-1"
+                    - logger.log: "Touch Button saved >>> 1 "                      
+
+                  else:  # start Programming This touch key
+                    - globals.set:
+                        id: selected_touch
+                        value: "1"
+                    - rtttl.play: 'Selected:d=16,o=5,b=120:c'
+                    - logger.log: "Touch Button Selected! 1 "
+- platform: gpio
+  name: "SN74HC165 Pin #2"
+  filters:
+    - delayed_on: 100ms 
+  pin:
+    sn74hc165: touch_sensors
+    # Use pin number 0
+    number: 2
+    inverted: false
+  id: touch_2
+  on_release:
+    then:
+      - if: 
+          condition:
+            lambda: 'return (id(programming_mode)&&(id(selected_touch)==2));'
+          then:
+            - number.operation:
+                id: select_relay_increment
+                operation: Increment
+                cycle: true
+
+            - globals.set: 
+                id: selected_relay2
+                value: !lambda return id(select_relay_increment).state;
+
+          else:
+            - logger.log: "Button 2 !" # operation mode running
+            - switch.toggle: Led_2
+            - if: 
+                condition: 
+                  switch.is_on: Led_2
+                then:
+                  - rtttl.play: 'Click:d=8,o=5,b=400:c'
+                  - number.set: 
+                      id: select_relay_on
+                      value: !lambda return (id(selected_relay2));
+                else: 
+                  - rtttl.play: 'Click:d=8,o=5,b=400:c'
+                  - number.set: 
+                      id: select_relay_off
+                      value: !lambda return (id(selected_relay2));
+  on_multi_click:
+    - timing:
+        - ON for at least 1s
+      then:
+        - if: 
+            condition:
+              lambda: 'return id(programming_mode);'
+            then:
+              - if:
+                  condition:
+                    lambda: 'return (id(selected_touch)==2);' # it is already selected the same touch
+                  then:
+                    - globals.set: #save selected Relay
+                        id: selected_relay2
+                        value: !lambda return id(select_relay_increment).state;
+                    - rtttl.play: 'Saved:d=4,o=5,b=120:c,e,g,c6'
+                    - globals.set:
+                        id: selected_touch
+                        value: "-1"
+                    - logger.log: "Touch Button saved >>> 2 "                      
+
+                  else:  # start Programming This touch key
+                    - globals.set:
+                        id: selected_touch
+                        value: "2"
+                    - rtttl.play: 'Selected:d=16,o=5,b=120:c'
+                    - logger.log: "Touch Button Selected! 2 "
+- platform: gpio
+  name: "SN74HC165 Pin #3"
+  filters:
+    - delayed_on: 100ms 
+  pin:
+    sn74hc165: touch_sensors
+    # Use pin number 3
+    number: 3
+    inverted: false
+  id: touch_3
+  on_release:
+    then:
+      - if: 
+          condition:
+            lambda: 'return (id(programming_mode)&&(id(selected_touch)==3));'
+          then:
+            - number.operation:
+                id: select_relay_increment
+                operation: Increment
+                cycle: true
+
+            - globals.set: 
+                id: selected_relay3
+                value: !lambda return id(select_relay_increment).state;
+
+          else:
+            - logger.log: "Button 3 !" # operation mode running
+            - switch.toggle: Led_3
+            - if: 
+                condition: 
+                  switch.is_on: Led_3
+                then:
+                  - rtttl.play: 'Click:d=8,o=5,b=400:c'
+                  - number.set: 
+                      id: select_relay_on
+                      value: !lambda return (id(selected_relay3));
+                else: 
+                  - rtttl.play: 'Click:d=8,o=5,b=400:c'
+                  - number.set: 
+                      id: select_relay_off
+                      value: !lambda return (id(selected_relay3));
+  on_multi_click:
+    - timing:
+        - ON for at least 1s
+      then:
+        - if: 
+            condition:
+              lambda: 'return id(programming_mode);'
+            then:
+              - if:
+                  condition:
+                    lambda: 'return (id(selected_touch)==3);' # it is already selected the same touch
+                  then:
+                    - globals.set: #save selected Relay
+                        id: selected_relay3
+                        value: !lambda return id(select_relay_increment).state;
+                    - rtttl.play: 'Saved:d=4,o=5,b=120:c,e,g,c6'
+                    - globals.set:
+                        id: selected_touch
+                        value: "-1"
+                    - logger.log: "Touch Button saved >>> 3 "                      
+
+                  else:  # start Programming This touch key
+                    - globals.set:
+                        id: selected_touch
+                        value: "3"
+                    - rtttl.play: 'Selected:d=16,o=5,b=120:c'
+                    - logger.log: "Touch Button Selected! 3 "
+- platform: gpio
+  name: "SN74HC165 Pin #4"
+  filters:
+    - delayed_on: 100ms 
+  pin:
+    sn74hc165: touch_sensors
+    # Use pin number 4
+    number: 4
+    inverted: false
+  id: touch_4
+  on_release:
+    then:
+      - if: 
+          condition:
+            lambda: 'return (id(programming_mode)&&(id(selected_touch)==4));'
+          then:
+            - number.operation:
+                id: select_relay_increment
+                operation: Increment
+                cycle: true
+
+            - globals.set: 
+                id: selected_relay4
+                value: !lambda return id(select_relay_increment).state;
+
+          else:
+            - logger.log: "Button 4 !" # operation mode running
+            - switch.toggle: Led_4
+            - if: 
+                condition: 
+                  switch.is_on: Led_4
+                then:
+                  - rtttl.play: 'Click:d=8,o=5,b=400:c'
+                  - number.set: 
+                      id: select_relay_on
+                      value: !lambda return (id(selected_relay4));
+                else: 
+                  - rtttl.play: 'Click:d=8,o=5,b=400:c'
+                  - number.set: 
+                      id: select_relay_off
+                      value: !lambda return (id(selected_relay4));
+  on_multi_click:
+    - timing:
+        - ON for at least 1s
+      then:
+        - if: 
+            condition:
+              lambda: 'return id(programming_mode);'
+            then:
+              - if:
+                  condition:
+                    lambda: 'return (id(selected_touch)==4);' # it is already selected the same touch
+                  then:
+                    - globals.set: #save selected Relay
+                        id: selected_relay4
+                        value: !lambda return id(select_relay_increment).state;
+                    - rtttl.play: 'Saved:d=4,o=5,b=120:c,e,g,c6'
+                    - globals.set:
+                        id: selected_touch
+                        value: "-1"
+                    - logger.log: "Touch Button saved >>> 4 "                      
+
+                  else:  # start Programming This touch key
+                    - globals.set:
+                        id: selected_touch
+                        value: "4"
+                    - rtttl.play: 'Selected:d=16,o=5,b=120:c'
+                    - logger.log: "Touch Button Selected! 4 "
+- platform: gpio
+  name: "SN74HC165 Pin #5"
+  filters:
+    - delayed_on: 100ms 
+  pin:
+    sn74hc165: touch_sensors
+    # Use pin number 5
+    number: 5
+    inverted: false
+  id: touch_5
+  on_release:
+    then:
+      - if: 
+          condition:
+            lambda: 'return (id(programming_mode)&&(id(selected_touch)==5));'
+          then:
+            - number.operation:
+                id: select_relay_increment
+                operation: Increment
+                cycle: true
+
+            - globals.set: 
+                id: selected_relay5
+                value: !lambda return id(select_relay_increment).state;
+
+          else:
+            - logger.log: "Button 5 !" # operation mode running
+            - switch.toggle: Led_5
+            - if: 
+                condition: 
+                  switch.is_on: Led_5
+                then:
+                  - rtttl.play: 'Click:d=8,o=5,b=400:c'
+                  - number.set: 
+                      id: select_relay_on
+                      value: !lambda return (id(selected_relay5));
+                else: 
+                  - rtttl.play: 'Click:d=8,o=5,b=400:c'
+                  - number.set: 
+                      id: select_relay_off
+                      value: !lambda return (id(selected_relay5));
+
+  on_multi_click:
+    - timing:
+        - ON for at least 1s
+      then:
+        - if: 
+            condition:
+              lambda: 'return id(programming_mode);'
+            then:
+              - if:
+                  condition:
+                    lambda: 'return (id(selected_touch)==5);' # it is already selected the same touch
+                  then:
+                    - globals.set: #save selected Relay
+                        id: selected_relay5
+                        value: !lambda return id(select_relay_increment).state;
+                    - rtttl.play: 'Saved:d=4,o=5,b=120:c,e,g,c6'
+                    - globals.set:
+                        id: selected_touch
+                        value: "-1"
+                    - logger.log: "Touch Button saved >>> 5 "                      
+
+                  else:  # start Programming This touch key
+                    - globals.set:
+                        id: selected_touch
+                        value: "5"
+                    - rtttl.play: 'Selected:d=16,o=5,b=120:c'
+                    - logger.log: "Touch Button Selected! 5 " 
+- platform: gpio
+  name: "SN74HC165 Pin #6"
+  filters:
+    - delayed_on: 100ms 
+  pin:
+    sn74hc165: touch_sensors
+    # Use pin number 6
+    number: 6
+    inverted: false
+  id: touch_6
+  on_release:
+    then:
+      - if: 
+          condition:
+            lambda: 'return (id(programming_mode)&&(id(selected_touch)==6));'
+          then:
+            - number.operation:
+                id: select_relay_increment
+                operation: Increment
+                cycle: true
+
+            - globals.set: 
+                id: selected_relay6
+                value: !lambda return id(select_relay_increment).state;
+
+          else:
+            - logger.log: "Button 6 !" # operation mode running
+            - switch.toggle: Led_6
+            - if: 
+                condition: 
+                  switch.is_on: Led_6
+                then:
+                  - rtttl.play: 'Click:d=8,o=5,b=400:c'
+                  - number.set: 
+                      id: select_relay_on
+                      value: !lambda return (id(selected_relay6));
+                else: 
+                  - rtttl.play: 'Click:d=8,o=5,b=400:c'
+                  - number.set: 
+                      id: select_relay_off
+                      value: !lambda return (id(selected_relay6));
+
+  on_multi_click:
+    - timing:
+        - ON for at least 1s
+      then:
+        - if: 
+            condition:
+              lambda: 'return id(programming_mode);'
+            then:
+              - if:
+                  condition:
+                    lambda: 'return (id(selected_touch)==6);' # it is already selected the same touch
+                  then:
+                    - globals.set: #save selected Relay
+                        id: selected_relay6
+                        value: !lambda return id(select_relay_increment).state;
+                    - rtttl.play: 'Saved:d=4,o=5,b=120:c,e,g,c6'
+                    - globals.set:
+                        id: selected_touch
+                        value: "-1"
+                    - logger.log: "Touch Button saved >>> 6 "                      
+
+                  else:  # start Programming This touch key
+                    - globals.set:
+                        id: selected_touch
+                        value: "6"
+                    - rtttl.play: 'Selected:d=16,o=5,b=120:c'
+                    - logger.log: "Touch Button Selected! 6 "
+- platform: gpio
+  name: "SN74HC165 Pin #7"
+  filters:
+    - delayed_on: 100ms 
+  pin:
+    sn74hc165: touch_sensors
+    # Use pin number 7
+    number: 7
+    inverted: false
+  id: touch_7
+  on_release:
+    then:
+      - if: 
+          condition:
+            lambda: 'return (id(programming_mode)&&(id(selected_touch)==7));'
+          then:
+            - number.operation:
+                id: select_relay_increment
+                operation: Increment
+                cycle: true
+
+            - globals.set: 
+                id: selected_relay7
+                value: !lambda return id(select_relay_increment).state;
+
+          else:
+            - logger.log: "Button 7 !" # operation mode running
+            - switch.toggle: Led_7
+            - if: 
+                condition: 
+                  switch.is_on: Led_7
+                then:
+                  - rtttl.play: 'Click:d=8,o=5,b=400:c'
+                  - number.set: 
+                      id: select_relay_on
+                      value: !lambda return (id(selected_relay7));
+                else: 
+                  - rtttl.play: 'Click:d=8,o=5,b=400:c'
+                  - number.set: 
+                      id: select_relay_off
+                      value: !lambda return (id(selected_relay7));
+  on_multi_click:
+    - timing:
+        - ON for at least 1s
+      then:
+        - if: 
+            condition:
+              lambda: 'return id(programming_mode);'
+            then:
+              - if:
+                  condition:
+                    lambda: 'return (id(selected_touch)==7);' # it is already selected the same touch
+                  then:
+                    - globals.set: #save selected Relay
+                        id: selected_relay7
+                        value: !lambda return id(select_relay_increment).state;
+                    - rtttl.play: 'Saved:d=4,o=5,b=120:c,e,g,c6'
+                    - globals.set:
+                        id: selected_touch
+                        value: "-1"
+                    - logger.log: "Touch Button saved >>> 7 "                      
+
+                  else:  # start Programming This touch key
+                    - globals.set:
+                        id: selected_touch
+                        value: "7"
+                    - rtttl.play: 'Selected:d=16,o=5,b=120:c'
+                    - logger.log: "Touch Button Selected! 7 "
+- platform: gpio
+  pin:
+    number: GPIO36
+    mode: INPUT
+    inverted: True
+  id: btn_1
+  name: "Bell 1"
+#    on_click:
+#      - if:
+#          condition: voice_assistant.is_running
+#          then:
+#            - voice_assistant.stop:
+#          else:
+#            - voice_assistant.start_continuous:
+  on_press:
+    if:
+      condition:
+        lambda: |-
+          return id(Led_2).state==true;
+      then:
+        - logger.log: "I Said don't distub !..."
+
+      else:
+        - logger.log: "Door bell!"
+    #- output.set_level:
+    #  id: buzzer
+    #  level: "100%"
+        - rtttl.play: 'ComplexFast:d=8,o=15,b=180:16c6,16e6,16g6,16c7,16b6,16g6,16e6,16c6,16a,16c6,16e6,16a6,16g6,16e6,16c6,16a,16f,16a,16c6,16f6,16e6,16c6,16a,16f,16d6,16f6,16a6,16d7,16c7,16a6,16f6,16d6,16b,16d6,16f6,16b6,16a6,16f6,16d6,16b,16g,16b,16d6,16g6,16f6,16d6,16b,16g,16e6,16g6,16b6,16e7,16d7,16b6,16g6,16e6,c7,16p,16c7,16b6,16a6,16g6,16f6,16e6,16d6,16c6,16b,16a,16g,16f,16e,16d,16c,g6,16p,16g6,16f6,16e6,16d6,16c6,16b,16a,16g,16f,16e,16d,16c,16b4,16a4,e6,16p,16e6,16d6,16c6,16b,16a,16g,16f,16e,16d,16c,16b4,16a4,16g4,16f4,c6,b,a,g,f,e,d,c,16c7,16b6,16a6,16g6,16f6,16e6,16d6,16c6'
+  on_release:
+    then:
+#    - output.set_level:
+#        id: buzzer
+#        level: "50%"    
+    - rtttl.stop
+
+
+- platform: template
+  name: "Some Switches On at the same time"
+  id: more_than_one_sensor_on
+  lambda: |-
+    return (id(touch_0).state + id(touch_1).state + id(touch_2).state + id(touch_3).state + id(touch_4).state + id(touch_5).state+ id(touch_6).state+ id(touch_7).state) > 1;
+  on_click:
+    - switch.turn_on: relay_0
+    - switch.turn_off: relay_1
+    - switch.turn_off: relay_2
+    - switch.turn_off: relay_3
+    - switch.turn_off: relay_4
+    - switch.turn_off: relay_5
+    - switch.turn_off: relay_6
+    - switch.turn_off: relay_7
+
+
+# - platform: template
+#   name: "Identify pressed"
+#   id: Identify_pressed
+#   lambda: |-
+#     return ((id(touch_0).state + id(touch_1).state >1) && (id(touch_2).state + id(touch_3).state + id(touch_4).state+ id(touch_5).state+ id(touch_6).state+ id(touch_7).state)<1)  ;
+#   on_press:
+#      - logger.log: "Identify Pressed..."
+
+ 
+
+- platform: template
+  name: "reboot pressed"
+  id: reboot_template
+  lambda: |-
+    return ((id(touch_0).state + id(touch_3).state + id(touch_4).state+ id(touch_7).state) > 3) && (id(touch_1).state + id(touch_2).state + id(touch_5).state+ id(touch_6).state)<1  ;
+  on_press:
+     - logger.log: "rebooting..."
+     - switch.turn_on: reboot_device
+     #- script.execute: blink_leds
+     
+- platform: template
+  name: "Factory reset pressed"
+  id: factory_template
+  lambda: |-
+    return ((id(touch_3).state + id(touch_5).state + id(touch_1).state+ id(touch_7).state) > 3) && (id(touch_0).state + id(touch_2).state + id(touch_4).state+ id(touch_6).state)<1  ;
+
+  on_press:
+     - logger.log: "Factory reset..."
+     - switch.turn_on: reset_factory
+     #- script.execute: blink_leds
+
+# Input number to select relay
+number:
+  - platform: template
+    name: "Relay Counter"
+    id: select_relay_increment
+    min_value: 0
+    max_value: 7
+    step: 1
+    initial_value: 0
+    optimistic: true
+    on_value: 
+      then:
+        - rtttl.play: 'OK:d=8,o=5,b=140:g6'
+        - script.execute: control_relay_select
+
+  - platform: template
+    name: "Select Relay on"
+    id: select_relay_on
+    min_value: 0
+    max_value: 7
+    step: 1
+    initial_value: 0
+    optimistic: true
+    on_value:
+      then:
+        - script.execute: control_relay_on
+  - platform: template
+    name: "Select Relay off"
+    id: select_relay_off
+    min_value: 0
+    max_value: 7
+    step: 1
+    initial_value: 0
+    optimistic: true
+    on_value:
+      then:
+        - script.execute: control_relay_off
+  - platform: template
+    name: "Select Relay"
+    id: select_relay
+    min_value: 0
+    max_value: 7
+    step: 1
+    initial_value: 1
+    optimistic: true
+    on_value:
+      then:
+        - script.execute: control_relay_select
+
+# Create a script to blink LEDs for 1 minute
+script:
+  - id: blink_leds
+    then:
+      - repeat:
+          count: 60
+          then:
+            - switch.toggle: Led_1
+            - switch.toggle: Led_2
+            - switch.toggle: Led_3
+            - switch.toggle: Led_4
+            - switch.toggle: Led_5
+            - switch.toggle: Led_6
+            - switch.toggle: Led_7
+            - switch.toggle: Led_0
+            - delay: 500ms
+  - id: control_relay_on
+    then:
+
+      - lambda: |-
+          if (id(select_relay_on).state == 1) {
+            id(relay_1).turn_on();
+          } else if (id(select_relay_on).state == 2) {
+            id(relay_2).turn_on();
+          } else if (id(select_relay_on).state == 3) {
+            id(relay_3).turn_on();
+          } else if (id(select_relay_on).state == 4) {
+            id(relay_4).turn_on();
+          } else if (id(select_relay_on).state == 5) {
+            id(relay_5).turn_on();
+          } else if (id(select_relay_on).state == 6) {
+            id(relay_6).turn_on();
+          } else if (id(select_relay_on).state == 7) {
+            id(relay_7).turn_on();
+          } else if (id(select_relay_on).state == 0) {
+            id(relay_0).turn_on();
+          }
+  - id: control_relay_off
+    then:
+      - lambda: |-
+          if (id(select_relay_off).state == 1) {
+            id(relay_1).turn_off();
+          } else if (id(select_relay_off).state == 2) {
+            id(relay_2).turn_off();
+          } else if (id(select_relay_off).state == 3) {
+            id(relay_3).turn_off();
+          } else if (id(select_relay_off).state == 4) {
+            id(relay_4).turn_off();
+          } else if (id(select_relay_off).state == 5) {
+            id(relay_5).turn_off();
+          } else if (id(select_relay_off).state == 6) {
+            id(relay_6).turn_off();
+          } else if (id(select_relay_off).state == 7) {
+            id(relay_7).turn_off();
+          } else if (id(select_relay_off).state == 0) {
+            id(relay_0).turn_off();
+          }          
+  - id: control_relay_select
+    then:
+      - switch.turn_off: relay_0
+      - switch.turn_off: relay_1
+      - switch.turn_off: relay_2
+      - switch.turn_off: relay_3
+      - switch.turn_off: relay_4
+      - switch.turn_off: relay_5
+      - switch.turn_off: relay_6
+      - switch.turn_off: relay_7    
+      - lambda: |-
+          if (id(select_relay_increment).state == 1) {
+            id(relay_1).turn_on();
+          } else if (id(select_relay_increment).state == 2) {
+            id(relay_2).turn_on();
+          } else if (id(select_relay_increment).state == 3) {
+            id(relay_3).turn_on();
+          } else if (id(select_relay_increment).state == 4) {
+            id(relay_4).turn_on();
+          } else if (id(select_relay_increment).state == 5) {
+            id(relay_5).turn_on();
+          } else if (id(select_relay_increment).state == 6) {
+            id(relay_6).turn_on();
+          } else if (id(select_relay_increment).state == 7) {
+            id(relay_7).turn_on();
+          } else if (id(select_relay_increment).state == 0) {
+            id(relay_0).turn_on();
+          }
+
+
+sn74hc165:
+- id: touch_sensors
+  clock_pin: 26
+  data_pin: 35
+  load_pin: 27
+  sr_count: 1
+
+
+sn74hc595:
+- id: 'sn74hc595_leds'
+  data_pin: 12
+  clock_pin: 32
+  latch_pin: 33
+- id: 'sn74hc595_relays'
+  data_pin: 19
+  clock_pin: 18
+  latch_pin: 5
+# Individual outputs
+ 
+text:
+  - platform: template
+  # Example text configuration
+    name: room Tag
+# Optional variables:
+    icon: "mdi:cursor-text"
+    id: name_tag 
+    mode: text
+    optimistic: true
+    on_value: 
+      then:
+        - lambda: id(tag_text) = id(name_tag).state;
+    
+  - platform: template
+    name: "add card"
+    id: add_card
+    optimistic: true
+    min_length: 0
+    max_length: 100
+    mode: text
+    on_value: 
+      then:
+
+        - lambda: |-
+            if (x.length() > 0) {
+                char cardID[21];
+                char startDatetime[20];
+                char endDatetime[20];
+
+                memset(cardID, 0, sizeof(cardID));
+                memset(startDatetime, 0, sizeof(startDatetime));
+                memset(endDatetime, 0, sizeof(endDatetime));
+
+                int result = sscanf(x.c_str(), "%20s %19s %19s", cardID, startDatetime, endDatetime);
+
+                if (result == 3) {
+                    bool card_found = false;
+                    
+                    // Check if card exists and update dates
+                    for (auto& card : id(cards)) {
+                        if (std::get<0>(card) == cardID) {
+                            std::get<1>(card) = startDatetime;
+                            std::get<2>(card) = endDatetime;
+                            card_found = true;
+                            id(logs).push_back({"Card updated", cardID, id(sntp_time).now().timestamp});
+                            ESP_LOGD("get_logs", "Updated existing card %s", cardID);
+                            break;
+                        }
+                    }
+                    
+                    // If card not found, add as new
+                    if (!card_found) {
+                        id(cards).push_back({cardID, startDatetime, endDatetime});
+                        id(logs).push_back({"Card added", cardID, id(sntp_time).now().timestamp});
+                        ESP_LOGD("get_logs", "Added new card %s", cardID);
+                    }
+                    
+                    update_cards_storage();
+                    
+                } else {
+                    ESP_LOGD("get_logs", "Failed to parse all values. Parsed count: %d", result);
+                }
+            } else {
+                ESP_LOGD("get_logs", "Input string is empty.");
+            }
+  - platform: template
+    name: "remove card"
+    id: remove_card
+    optimistic: true
+    min_length: 0
+    max_length: 100
+    mode: text
+    on_value: 
+      then:
+        - lambda: |-
+            if (x.length() > 0) {
+                char cardID[21];
+                memset(cardID, 0, sizeof(cardID));
+
+                int result = sscanf(x.c_str(), "%20s", cardID);
+
+                if (result == 1) {
+                    bool card_found = false;
+
+                    // Find and remove the card
+                    for (size_t i = 0; i < id(cards).size(); ++i) {
+                        if (std::get<0>(id(cards)[i]) == cardID) {
+                            id(cards).erase(id(cards).begin() + i);
+                            card_found = true;
+                            id(logs).push_back({"Card removed", cardID, id(sntp_time).now().timestamp});
+                            ESP_LOGD("remove_card", "Removed card %s", cardID);
+                            update_cards_storage();
+                            break;
+                        }
+                    }
+
+                    if (!card_found) {
+                        ESP_LOGD("remove_card", "Card %s not found", cardID);
+                    }
+                } else {
+                    ESP_LOGD("remove_card", "Failed to parse card ID. Parsed count: %d", result);
+                }
+            } else {
+                ESP_LOGD("remove_card", "Input string is empty.");
+            }
+
+sensor:
+ 
+    
+
+
+#- platform: ble_client
+#  ble_client_id: my_ble_client
+#  service_uuid: "9CC91F73-FC1E-434D-8910-BDF174F3C46C"  # Service UUID of your custom sensor
+#  characteristic_uuid: "ACFE94B1-9D1C-4C80-8E1C-BE1CD61B417A"  # Characteristic UUID for the value
+  
+#  name: "Touch BLE Sensor"
+#  type: characteristic
+#  notify: True
+#  on_notify: 
+#    then:
+#      lambda: |-
+#        ESP_LOGD("BLE AUTH", "NOTIFY: %f", x);
+#  on_value: 
+#    then:
+      
+#      lambda: |-
+#        ESP_LOGD("BLE AUTH", "NOTIFY: %s", x);
+  
+
+
+  
+#- platform: ble_client
+#  ble_client_id: my_ble_client
+#  service_uuid: "5912986B-CD94-45BB-909A-B7A385C54B80"  # Service UUID of your custom sensor
+#  characteristic_uuid: "6785AC63-3353-44C3-8DAE-2EC68AA14BD4"  # Characteristic UUID for the value
+#  name: "Auth BLE Sensor"
+#  type: characteristic
+#  notify: True
+#  on_notify: 
+#    then:
+#      lambda: |-
+#        ESP_LOGD("BLE AUTH", "NOTIFY: %f", x);
+#  on_value: 
+#    then:
+#      lambda: |-
+#        ESP_LOGD("BLE AUTH", "NOTIFY: %s", x);
+  
+  - platform: uptime
+    name: Alarm uptime
+#- platform: modbus_controller
+#  modbus_controller_id: sdm
+#  name: "Total active energy"
+#  id: total_energy
+  #    address: 0x156
+  #    register_type: "read"
+  ## reimplement using custom_command
+  # 0x2 : modbus device address
+  # 0x4 : modbus function code
+  # 0x1 : high byte of modbus register address
+  # 0x56: low byte of modbus register address
+  # 0x00: high byte of total number of registers requested
+  # 0x02: low byte of total number of registers requested
+#  custom_command: [ 0x2, 0x4, 0x1, 0x56,0x00, 0x02]
+#  value_type: FP32
+#  unit_of_measurement: kWh
+#  accuracy_decimals: 1
+#- platform: uptime
+#  name: Alarm uptime
+# Enable logging
+logger:
+  baud_rate: 115200
+  level: DEBUG 
+  #logs:
+  #  esp32_ble_pinpad.component: VERBOSE
+
+
+  
+ 
+api:
+  reboot_timeout: 0s
+  
+ota:
+  - platform: http_request
+  - platform: esphome
+    password: "WONDXLLCDOORMAN"
+
+http_request:
+  verify_ssl: false
+  
+
+wifi:
+  networks:
+    - id: WiFi_i2
+      ssid: "iot"
+      password: "Flash2k1" 
+    
+
+  reboot_timeout: 0s
+  
+
+
+# Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Doorman1-0-6 Fallback Hotspot"
+    password: "123456789"
+
+captive_portal:
+i2c:
+  scan: False
+  id: bus_I2C  
+  frequency: 100kHz
+  timeout: 2ms  # see https://github.com/esphome/issues/issues/4340
+  
+
+time:
+
+- platform: ds1307
+  id: sntp_time
+
+  update_interval: never
+
+- platform: sntp
+  id: sntp_time2
+  timezone: Africa/Cairo
+  servers:
+    - 0.pool.ntp.org
+    - 1.pool.ntp.org
+    - 2.pool.ntp.org
+
+- platform: homeassistant
+  # instead try to synchronize via network repeatedly ...
+  on_time_sync:
+    then:
+      # ... and update the RTC when the synchronization was successful
+      ds1307.write_time:
+ 
+
+#============================ Buzzer =============================================================
+output:
+ 
+
+- platform: ledc
+  pin: GPIO23
+  id: buzzer
+
+
+rtttl:
+  id: main_rtttl_component
+  output: buzzer
+  on_finished_playback:
+    - logger.log: 'Song ended!'
+
+
+#========================================== Relay Switches =============================================
+switch:
+- platform: template
+  name: "Switch Reassignment Mode"
+  id: programming_switch
+  optimistic: true
+  on_turn_on:
+    then:
+      - globals.set:
+          id: programming_mode
+          value: 'true'
+      - rtttl.play: 'program:d=4,o=5,b=100:c,e,g'
+  on_turn_off:
+    then:
+      - globals.set:
+          id: programming_mode
+          value: 'false'
+      - rtttl.play: 'exit:d=4,o=5,b=100:g,e,c'
+
+- platform: template
+  name: "BLE Server"
+  id: ble_server_switch
+  optimistic: true
+  on_turn_on:
+    then:
+      lambda: |-
+        //id(esp32_ble_pinpad1).start();
+
+  on_turn_off:
+    then:
+      lambda: |- 
+       //id(esp32_ble_pinpad1).stop();
+- platform: restart
+  name: "Device Restart"  
+  id: reboot_device
+
+
+- platform: factory_reset
+  name: "Factory Reset"
+  id: reset_factory
+
+
+######## relays ########
+- platform: gpio
+  name: "Relay 0"
+  restore_mode: RESTORE_DEFAULT_OFF
+  
+  pin:
+    sn74hc595: sn74hc595_relays
+    # Use pin number 0
+    number: 0
+    inverted: false
+  id: relay_0
+ 
+  on_turn_on:
+  - logger.log: "Switch Turned On!"
+#  - rtttl.play: 'siren:d=8,o=2,b=3500:d'
+#  - switch.turn_on: Led_0
+  on_turn_off:
+  - logger.log: "Switch Turned Off!"
+#  - rtttl.play: 'siren:d=8,o=2,b=2500:df'
+#  - switch.turn_off: Led_0
+
+- platform: gpio
+  name: "Relay 1"
+  restore_mode: RESTORE_DEFAULT_OFF
+  pin:
+    sn74hc595: sn74hc595_relays
+    # Use pin number 0
+    number: 1
+    inverted: false
+  id: relay_1
+  on_turn_on:
+  - logger.log: "Switch Turned On!"
+#  - rtttl.play: 'siren:d=8,o=2,b=3500:d'
+#  - switch.turn_on: Led_1
+  on_turn_off:
+  - logger.log: "Switch Turned Off!"
+#  - rtttl.play: 'siren:d=8,o=2,b=2500:df'
+#  - switch.turn_off: Led_1
+- platform: gpio
+  name: "Relay 2"
+  restore_mode: RESTORE_DEFAULT_OFF
+  pin:
+    sn74hc595: sn74hc595_relays
+    # Use pin number 0
+    number: 2
+    inverted: false
+  id: relay_2
+
+
+  on_turn_on:
+  - logger.log: "Switch Turned On!"
+#  - rtttl.play: 'siren:d=8,o=2,b=3500:d'
+#  - switch.turn_on: Led_2
+  on_turn_off:
+  - logger.log: "Switch Turned Off!"
+#  - rtttl.play: 'siren:d=8,o=2,b=2500:df'
+#  - switch.turn_off: Led_2
+- platform: gpio
+  name: "Relay 3"
+  restore_mode: RESTORE_DEFAULT_OFF
+  pin:
+    sn74hc595: sn74hc595_relays
+    # Use pin number 0
+    number: 3
+    inverted: false
+  id: relay_3
+
+
+  on_turn_on:
+  - logger.log: "Switch Turned On!"
+#  - rtttl.play: 'siren:d=8,o=2,b=3500:d'
+#  - switch.turn_on: Led_3
+  on_turn_off:
+  - logger.log: "Switch Turned Off!"
+#  - rtttl.play: 'siren:d=8,o=2,b=2500:df'
+#  - switch.turn_off: Led_3
+- platform: gpio
+  name: "Relay 4"
+  restore_mode: RESTORE_DEFAULT_OFF
+  pin:
+    sn74hc595: sn74hc595_relays
+    # Use pin number 0
+    number: 4
+    inverted: false
+  id: relay_4
+  on_turn_on:
+  - logger.log: "Switch Turned On!"
+#  - rtttl.play: 'siren:d=8,o=2,b=3500:d'
+#  - switch.turn_on: Led_4
+  on_turn_off:
+  - logger.log: "Switch Turned Off!"
+#  - rtttl.play: 'siren:d=8,o=2,b=2500:df'
+#  - switch.turn_off: Led_4
+- platform: gpio
+  name: "Relay 5"
+  restore_mode: RESTORE_DEFAULT_OFF
+  pin:
+    sn74hc595: sn74hc595_relays
+    # Use pin number 0
+    number: 5
+    inverted: false
+  id: relay_5
+  on_turn_on:
+  - logger.log: "Switch Turned On!"
+#  - rtttl.play: 'siren:d=8,o=2,b=3500:d'
+#  - switch.turn_on: Led_5
+  on_turn_off:
+  - logger.log: "Switch Turned Off!"
+#  - rtttl.play: 'siren:d=8,o=2,b=2500:df'
+#  - switch.turn_off: Led_5
+- platform: gpio
+  name: "Relay 6"
+  restore_mode: RESTORE_DEFAULT_OFF
+  pin:
+    sn74hc595: sn74hc595_relays
+    # Use pin number 0
+    number: 6
+    inverted: false
+  id: relay_6
+
+  on_turn_on:
+  - logger.log: "Switch Turned On!"
+#  - rtttl.play: 'siren:d=8,o=2,b=3500:d'
+#  - switch.turn_on: Led_6
+  on_turn_off:
+  - logger.log: "Switch Turned Off!"
+#  - rtttl.play: 'siren:d=8,o=2,b=2500:df'
+#  - switch.turn_off: Led_6
+
+- platform: gpio
+  name: "Relay 7"
+  restore_mode: RESTORE_DEFAULT_OFF
+  pin:
+    sn74hc595: sn74hc595_relays
+    # Use pin number 0
+    number: 7
+    inverted: false
+  id: relay_7
+
+
+  on_turn_on:
+  - logger.log: "Switch Turned On!"
+#  - rtttl.play: 'siren:d=8,o=2,b=3500:d'
+#  - switch.turn_on: Led_7
+  on_turn_off:
+  - logger.log: "Switch Turned Off!"
+#  - rtttl.play: 'siren:d=8,o=2,b=2500:df'
+#  - switch.turn_off: Led_7
+
+
+- platform: gpio
+  name: "Door"
+  pin: 2
+  id: OPTO_1
+  inverted: false
+  on_turn_on:
+  - logger.log: "Switch Turned On!"
+  - rtttl.play: 'siren:d=8,o=2,b=2500:df'
+  - delay: 500ms
+  - switch.turn_off: OPTO_1
+  on_turn_off:
+  - logger.log: "Switch Turned Off!"
+  
+ 
+######## Leds ########
+- platform: gpio
+  name: "Light 0"
+  restore_mode: RESTORE_DEFAULT_OFF
+  pin:
+    sn74hc595: sn74hc595_leds
+    # Use pin number 0
+    number: 0
+    inverted: false
+  id: Led_0
+  inverted: false
+  on_turn_on:
+    - logger.log: "Switch Turned On!"
+  on_turn_off:
+    - logger.log: "Switch Turned Off!"
+- platform: gpio
+  name: "Light 1"
+  restore_mode: RESTORE_DEFAULT_OFF
+  pin:
+    sn74hc595: sn74hc595_leds
+    # Use pin number 0
+    number: 1
+    inverted: false
+  id: Led_1
+  inverted: false
+  on_turn_on:
+  
+  - logger.log: "Switch Turned On!"
+  on_turn_off:
+  
+  - logger.log: "Switch Turned Off!"
+- platform: gpio
+  name: "Light 2"
+  restore_mode: RESTORE_DEFAULT_OFF
+  pin:
+    sn74hc595: sn74hc595_leds
+    # Use pin number 0
+    number: 2
+    inverted: false
+  id: Led_2
+  inverted: false
+  on_turn_on:
+  
+  - logger.log: "Switch Turned On!"
+  on_turn_off:
+  
+  - logger.log: "Switch Turned Off!"
+- platform: gpio
+  name: "Light 3"
+  restore_mode: RESTORE_DEFAULT_OFF
+  pin:
+    sn74hc595: sn74hc595_leds
+    # Use pin number 0
+    number: 3
+    inverted: false
+  id: Led_3
+  inverted: false
+  on_turn_on:
+  
+  - logger.log: "Switch Turned On!"
+  on_turn_off:
+  
+  - logger.log: "Switch Turned Off!"
+- platform: gpio
+  name: "Light 4"
+  restore_mode: RESTORE_DEFAULT_OFF
+  pin:
+    sn74hc595: sn74hc595_leds
+    # Use pin number 0
+    number: 4
+    inverted: false
+  id: Led_4
+  inverted: false
+  on_turn_on:
+  
+  - logger.log: "Switch Turned On!"
+  on_turn_off:
+  
+  - logger.log: "Switch Turned Off!"
+
+- platform: gpio
+  name: "Light 5"
+  restore_mode: RESTORE_DEFAULT_OFF
+  pin:
+    sn74hc595: sn74hc595_leds
+    # Use pin number 0
+    number: 5
+    inverted: false
+  id: Led_5
+  inverted: false
+  on_turn_on:
+  
+  - logger.log: "Switch Turned On!"
+  on_turn_off:
+  
+  - logger.log: "Switch Turned Off!"
+- platform: gpio
+  name: "Light 6"
+  restore_mode: RESTORE_DEFAULT_OFF
+  pin:
+    sn74hc595: sn74hc595_leds
+    # Use pin number 0
+    number: 6
+    inverted: false
+  id: Led_6
+  inverted: false
+  on_turn_on:
+  
+  - logger.log: "Switch Turned On!"
+  on_turn_off:
+  
+  - logger.log: "Switch Turned Off!"
+
+
+
+
+- platform: gpio
+  name: "Light 7"
+  restore_mode: RESTORE_DEFAULT_OFF
+  pin:
+    sn74hc595: sn74hc595_leds
+    # Use pin number 0
+    number: 7
+    inverted: false
+  id: Led_7
+  inverted: false
+  on_turn_on:
+  
+  - logger.log: "Switch Turned On!"
+  on_turn_off:
+  
+  - logger.log: "Switch Turned Off!"
+  
+ 
+
+# #===================================================== BLUE TOOTH SEVER=======================================
+# # Enable Bluetooth Low Energy (BLE)
+external_components:
+  - source:
+      type: local
+      path: custom_components 
+    components: [ nimble_server ]
+
+nimble_server:
+  id: ble1
+  secret_passcode: changeme
+#  security_mode: hotp
+  services:
+    - uuid128: [0x90, 0x9e, 0x93, 0x7a, 0xe8, 0x26, 0x11, 0xee, 0xbd, 0x3d, 0x02, 0x42, 0xac, 0x12, 0x00, 0x00]
+      characteristics:
+        - uuid128: [0x90, 0x9e, 0x93, 0x7a, 0xe8, 0x26, 0x11, 0xee, 0xbd, 0x3d, 0x02, 0x42, 0xac, 0x12, 0x00, 0x06]
+          permissions: ["read", "write", "notify"]
+
+    # # Define a service with a 16-bit UUID
+    # - uuid: 0x180A  # Device Information Service
+    #   characteristics:
+    #     # Characteristic with read and notify permissions
+    #     - uuid: 0x2A29  # Manufacturer Name String
+    #       permissions:
+    #         - read
+    #         - notify
+    #     # Characteristic with write permission
+    #     - uuid: 0x2A24  # Model Number String
+    #       permissions:
+    #         - write
+
+    # Define a service with a 128-bit UUID
+    - uuid128: [0x90, 0x9e, 0x93, 0x7a, 0xe8, 0x26, 0x11, 0xee, 0xbd, 0x3d, 0x02, 0x42, 0xac, 0x12, 0x00, 0x00]
+      characteristics:
+        # Characteristic with read, write, and notify permissions
+        - uuid128: [0x90, 0x9e, 0x93, 0x7a, 0xe8, 0x26, 0x11, 0xee, 0xbd, 0x3d, 0x02, 0x42, 0xac, 0x12, 0x00, 0x06]
+          permissions:
+            - read
+            - write
+            - notify
+  on_client_connected:
+    then:
+      - lambda: |-
+          ESP_LOGD("BLE CONNECTED", "BLE Client Connected, MAC: %s", mac.c_str());     
+          id(ble_client_mac).state=mac.c_str();
+          id(connected_remote_mac)=mac.c_str();
+
+  
+      - text_sensor.template.publish:
+          id: ble_client_mac
+          state: !lambda 'return mac.c_str();'
+      
+
+  on_pinpad_accepted:
+    - logger.log: "Rad! Correct pin was given!"
+  on_pinpad_rejected:
+    - logger.log: "Bummer! Incorrect pin was given."
+  on_user_selected:
+    - logger.log: "Bummer! Incorrect pin was given."
+  on_user_command_received:
+    - logger.log: "========== Command Received.  _________________________________________=================================="
+    
+    - lambda: |-
+        char first_char = cmd[0]-48;
+        char second_char = cmd[1]-48;
+        ESP_LOGD("ble_SENSE", " -RRRRRRR Received:    %s  from MAC: %s", cmd.c_str(), mac.c_str());
+        
+        if(first_char==9 && second_char==9)
+          id(reboot_device).turn_on();
+        
+        if (mac.c_str()!=id(stored_remote_mac))
+        {
+          ESP_LOGD("ble_SENSE", " -MAC REFUSED:    %s  but remote MAC is: %s", mac.c_str() ,id(stored_remote_mac).c_str() );
+          return;
+        }
+
+        ESP_LOGD("ble_adv", " _CMD_______________   - %d",first_char);
+        ESP_LOGD("ble_adv", " _OPTION____________   - %d",second_char);
+        
+        if(first_char==1)
+        {
+            ESP_LOGD("ble_adv", " _OPTION__1__________   - %d",second_char);
+            
+            if (second_char == 0) {
+              id(relay_3).turn_on();
+            } else if (second_char == 1) {
+              id(relay_2).turn_on();
+            } else if (second_char == 2) {
+              id(relay_1).turn_on();
+            } else if (second_char == 3) {
+              id(relay_0).turn_on();
+            } else if (second_char == 4) {
+              id(relay_7).turn_on();
+            } else if (second_char == 5) {
+              id(relay_6).turn_on();
+            } else if (second_char == 6) {
+              id(relay_5).turn_on();
+            } else if (second_char == 7) {
+              id(relay_4).turn_on();
+            } else if (second_char == 8) {
+              id(relay_0).turn_on();
+              id(relay_1).turn_on();
+              id(relay_2).turn_on();
+              id(relay_3).turn_on();
+              id(relay_4).turn_on();
+              id(relay_5).turn_on();
+              id(relay_6).turn_on();
+              id(relay_7).turn_on();
+
+            }            
+
+         }
+         else
+         {
+            
+            ESP_LOGD("ble_adv", " _OPTION_0___________   - %d",second_char);
+
+
+            if (second_char == 0) {
+              id(relay_3).turn_off();
+            } else if (second_char == 1) {
+              id(relay_2).turn_off();
+            } else if (second_char == 2) {
+              id(relay_1).turn_off();
+            } else if (second_char == 3) {
+              id(relay_0).turn_off();
+            } else if (second_char == 4) {
+              id(relay_7).turn_off();
+            } else if (second_char == 5) {
+              id(relay_6).turn_off();
+            } else if (second_char == 6) {
+              id(relay_5).turn_off();
+            } else if (second_char == 7) {
+              id(relay_4).turn_off();
+            } else if (second_char == 9) {
+              id(OPTO_1).turn_off();
+            }
+        
+          }
+          
+         // ESP_LOGD("ble_adv", " ___________________   - %d",id(select_relay_on).state);

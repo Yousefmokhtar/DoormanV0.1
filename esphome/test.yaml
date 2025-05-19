@@ -1,0 +1,573 @@
+#VERSION  1.0.6.1
+#PINOUTS
+#39 ADC  MIC
+#25 PWM  SPK
+
+
+#12   SER-LED-DS
+#32   SCK-LED-CLOCK
+#33   RCK-LED -LATCH                         TOUCH DATA
+
+
+#35   SER OUT-DS -touch
+#26   CLK-touch
+#27   SH/LD_-touch
+
+
+#23 BUZZER
+
+
+#21 SDA  NFC/RTC
+#22 SCL  NFC/RTC
+
+
+#2 OPTO
+
+
+#19 MISO -DS
+#18 CLK  -CLOCK           RELAYS
+#5  CS -LATCH
+
+
+#13
+#17 TX2   MODBUS
+#16 RX2
+
+
+#36 BTN
+
+esphome:
+  name: doorman1-0-6-dwa-ble-optimized #"doorman1-0-6-dwa-clear-fix"
+#  friendly_name: doorman1-0-6-dwa-ble #doorman1-0-6-dwa-clear-fix
+  # libraries: 
+  #- h2zero/esp-nimble-cpp@^2.1.0
+    # - espressif/esp-nimble
+
+#    - nkolban/ESP32 BLE Arduino
+#    - h2zero/NimBLE-Arduino
+
+  includes: 
+    - custom_components/custom_card_storage.h
+
+
+  on_boot:
+    then:
+      - ds1307.read_time:
+        
+      - lambda: |-
+          if (esp_reset_reason() == ESP_RST_POWERON) {
+            // If the reboot reason is a power-on reset, trigger a reboot
+            ESP_LOGD("main", "Power-on reset detected. Rebooting...");
+            //id(main_rtttl_component).play("MASH:d=8,o=5,b=140:4a,4g,f#,g,p,4a,4g,f#,g,p");
+            sleep(5000);
+            id(reboot_device).turn_on();
+            
+          } else {
+            //id(main_rtttl_component).play("Granted:d=8,o=5,b=140:g,p");
+            ESP_LOGD("main", "Reboot reason is not power-on. No action taken.");
+          }
+
+ 
+
+esp32:
+  board: esp32doit-devkit-v1
+  flash_size : 4MB
+  framework:
+    type: esp-idf
+    version: latest
+    sdkconfig_options:
+      CONFIG_BT_ENABLED: y
+      CONFIG_BT_BLUEDROID_ENABLED: n
+      CONFIG_BT_NIMBLE_ENABLED: y
+      CONFIG_PARTITION_TABLE_CUSTOM: y
+      CONFIG_PARTITION_TABLE_CUSTOM_FILENAME: "custom_partion.csv"
+      CONFIG_PARTITION_TABLE_FILENAME: "custom_partion.csv"
+      CONFIG_PARTITION_TABLE_OFFSET: "0x8000"
+
+  partitions: "custom_partion.csv"
+
+
+
+
+external_components:
+  # Local component (nimble_server)
+  - source:
+      type: local
+      path: custom_components  # Path to local components
+    components: [ nimble_server ]  # Component name must match dir name
+  - source: 
+      type: local
+      path: custom_components  # Path to local components
+    components: [my_nvs]
+
+my_nvs: 
+  id: my_nvs_component
+
+preferences:
+ # flash_write_interval: 10sec
+globals: !include  globals.yaml
+
+button:
+  - platform: template
+    name: "Remove All Cards"
+    id: remove_all_cards
+    on_press:
+      then:
+        - logger.log: "Removing all cards and their validity..."
+        - lambda: delete_all_uids() ;
+
+
+  - platform: template
+    name: "Load All Cards"
+    on_press:
+      then:
+        - logger.log: "Loading All Cards"
+        - lambda: load_all_uids() ; print_flash_info();
+
+  - platform: template
+    name: Remote Add
+    id: remote_add
+    on_press:
+      then: 
+
+        - lambda: id(stored_remote_mac)=id(connected_remote_mac);
+        - logger.log: "remote mac address added"
+        - logger.log: id(ble_client_mac).state
+  
+  - platform: template
+    name: FIRMWARE Update
+    id: firmware_update
+    on_press:
+      then:
+        - logger.log: "OTA Update triggered..." 
+        - ota.http_request.flash:
+            url: http://homeassistant.local/uploads/doorman.ota.bin
+            md5_url: http://homeassistant.local/uploads/doorman.ota.md5
+            #md5: ca2c308baf2a04e70e9c610bc0eacdd5
+
+        - logger.log: "This message should be not displayed because the device reboots"
+  
+#================================ NFC READER =====================================================
+
+i2c:
+  scl: GPIO22
+  sda: GPIO21
+  scan: True
+  id: bus_I2C  
+  frequency: 100kHz
+  timeout: 2ms  # see https://github.com/esphome/issues/issues/4340
+
+pn532_i2c:
+  id: pn532_1
+  update_interval: 250ms
+
+  on_tag:
+    then:
+      - lambda: |-
+           if(compare_uuid_in_nvs(x.c_str())==true)
+           {
+              id(OPTO_1).turn_on();
+              id(door_access_state).state=true;
+              id(main_rtttl_component).play("SUCCESS:d=8,o=5,b=140:f#,g");
+
+           }else{id(main_rtttl_component).play("FAIL:d=8,o=5,b=100:c,p,c");}
+           
+
+      - logger.log: cards.End
+      - rtttl.play: 'MASH:d=8,o=5,b=140:f#,g,p'
+      - lambda: id(rfid_tag).state=x;
+          
+text_sensor:
+  - platform: template
+    name: "Last Reset Reason"    
+    lambda: |-
+      // Use ESP-IDF's esp_reset_reason() function to get the reset reason
+      esp_reset_reason_t reason = esp_reset_reason();
+
+
+      // Return the reset reason as a string
+      switch (reason) {
+        case ESP_RST_POWERON:
+          return {"Power-on reset"};
+        case ESP_RST_EXT:
+          return {"External reset"};
+        case ESP_RST_SW:
+          return {"Software reset"};
+        case ESP_RST_PANIC:
+          return {"Panic reset"};
+        case ESP_RST_INT_WDT:
+          return {"Interrupt watchdog reset"};
+        case ESP_RST_TASK_WDT:
+          return {"Task watchdog reset"};
+        case ESP_RST_WDT:
+          return {"Other watchdog reset"};
+        case ESP_RST_DEEPSLEEP:
+          return {"Deep sleep reset"};
+        case ESP_RST_BROWNOUT:
+          return {"Brownout reset"};
+        case ESP_RST_SDIO:
+          return {"SDIO reset"};
+        default:
+          return {"Unknown reset reason"};
+      }  
+     
+
+
+  - platform: template
+    name: "Remote Mac Address"
+    id: ble_client_mac
+
+  - platform: template
+    name: "Device Info"
+    id: Identify_device
+
+
+  - platform: template
+    name: "Current Device Time"
+    update_interval: 5min
+    lambda: |-
+      char time_str[20];
+      snprintf(time_str, 20, "%02d/%02d/%04d %02d:%02d:%02d",id(sntp_time).now().day_of_month,id(sntp_time).now().month,id(sntp_time).now().year, id(sntp_time).now().hour, id(sntp_time).now().minute, id(sntp_time).now().second);
+      return {time_str}; 
+
+  - platform: wifi_info
+    ip_address:
+      name: ESP IP Address
+      address_0:
+        name: ESP IP Address 0
+      address_1:
+        name: ESP IP Address 1
+      address_2:
+        name: ESP IP Address 2
+      address_3:
+        name: ESP IP Address 3
+      address_4:
+        name: ESP IP Address 4
+    ssid:
+      name: ESP Connected SSID
+    bssid:
+      name: ESP Connected BSSID
+    mac_address:
+      name: ESP Mac Wifi Address
+    scan_results:
+      name: ESP Latest Scan Results
+    dns_address:
+      name: ESP DNS Address
+        
+  - platform: template
+    name: "PAIRING PIN"
+    id: ble_pin
+  - platform: template
+    name: "rfid_tag"
+    id: rfid_tag
+
+ 
+ 
+      
+#====================================== Touch buttons =============================================
+binary_sensor:
+#################################
+- platform: template
+  name: "door_access_state"
+  id: door_access_state
+################################# TOUCH SENSORS #########################################
+
+- <<: !include { file: touch_action.yaml, vars: { id: 0 } } 
+- <<: !include { file: touch_action.yaml, vars: { id: 1 } } 
+- <<: !include { file: touch_action.yaml, vars: { id: 2 } } 
+- <<: !include { file: touch_action.yaml, vars: { id: 3 } } 
+- <<: !include { file: touch_action.yaml, vars: { id: 4 } } 
+- <<: !include { file: touch_action.yaml, vars: { id: 5 } } 
+- <<: !include { file: touch_action.yaml, vars: { id: 6 } } 
+- <<: !include { file: touch_action.yaml, vars: { id: 7 } } 
+
+
+- platform: gpio
+  pin:
+    number: GPIO36
+    mode: INPUT
+    inverted: True
+  id: btn_1
+  name: "Bell 1"
+
+  on_press:
+    if:
+      condition:
+        lambda: |-
+          return id(Led_2).state==true;
+      then:
+        - logger.log: "I Said don't distub !..."
+
+      else:
+        - logger.log: "Door bell!"
+    #- output.set_level:
+    #  id: buzzer
+    #  level: "100%"
+        - rtttl.play: 'ComplexFast:d=8,o=15,b=180:16c6,16e6,16g6,16c7,16b6,16g6,16e6,16c6,16a,16c6,16e6,16a6,16g6,16e6,16c6,16a,16f,16a,16c6,16f6,16e6,16c6,16a,16f,16d6,16f6,16a6,16d7,16c7,16a6,16f6,16d6,16b,16d6,16f6,16b6,16a6,16f6,16d6,16b,16g,16b,16d6,16g6,16f6,16d6,16b,16g,16e6,16g6,16b6,16e7,16d7,16b6,16g6,16e6,c7,16p,16c7,16b6,16a6,16g6,16f6,16e6,16d6,16c6,16b,16a,16g,16f,16e,16d,16c,g6,16p,16g6,16f6,16e6,16d6,16c6,16b,16a,16g,16f,16e,16d,16c,16b4,16a4,e6,16p,16e6,16d6,16c6,16b,16a,16g,16f,16e,16d,16c,16b4,16a4,16g4,16f4,c6,b,a,g,f,e,d,c,16c7,16b6,16a6,16g6,16f6,16e6,16d6,16c6'
+  on_release:
+    then:
+#    - output.set_level:
+#        id: buzzer
+#        level: "50%"    
+    - rtttl.stop
+
+
+- platform: template
+  name: "Some Switches On at the same time"
+  id: more_than_one_sensor_on
+  lambda: |-
+    return (id(touch_0).state + id(touch_1).state + id(touch_2).state + id(touch_3).state + id(touch_4).state + id(touch_5).state+ id(touch_6).state+ id(touch_7).state) > 1;
+  on_click:
+    - switch.turn_on:  relay_0
+    - switch.turn_off: relay_1
+    - switch.turn_off: relay_2
+    - switch.turn_off: relay_3
+    - switch.turn_off: relay_4
+    - switch.turn_off: relay_5
+    - switch.turn_off: relay_6
+    - switch.turn_off: relay_7
+
+ 
+- platform: template
+  name: "reboot pressed"
+  id: reboot_template
+  lambda: |-
+    return ((id(touch_0).state + id(touch_3).state + id(touch_4).state+ id(touch_7).state) > 3) && (id(touch_1).state + id(touch_2).state + id(touch_5).state+ id(touch_6).state)<1  ;
+  on_press:
+     - logger.log: "rebooting..."
+     - switch.turn_on: reboot_device
+     #- script.execute: blink_leds
+     
+- platform: template
+  name: "Factory reset pressed"
+  id: factory_template
+  lambda: |-
+    return ((id(touch_3).state + id(touch_5).state + id(touch_1).state+ id(touch_7).state) > 3) && (id(touch_0).state + id(touch_2).state + id(touch_4).state+ id(touch_6).state)<1  ;
+
+  on_press:
+     - logger.log: "Factory reset..."
+     - switch.turn_on: reset_factory
+     #- script.execute: blink_leds
+
+# Input number to select relay
+number: !include relay_counter.yaml
+# Create a script to blink LEDs for 1 minute
+script: !include relay_script.yaml
+
+
+sn74hc165:
+- id: touch_sensors
+  clock_pin: 26
+  data_pin: 35
+  load_pin: 27
+  sr_count: 1
+
+
+sn74hc595:
+- id: 'sn74hc595_leds'
+  data_pin: 12
+  clock_pin: 32
+  latch_pin: 33
+- id: 'sn74hc595_relays'
+  data_pin: 19
+  clock_pin: 18
+  latch_pin: 5
+# Individual outputs
+ 
+text:
+  - platform: template
+  # Example text configuration
+    name: room Tag
+# Optional variables:
+    icon: "mdi:cursor-text"
+    id: name_tag 
+    mode: text
+    optimistic: true
+    on_value: 
+      then:
+        - lambda: id(tag_text) = id(name_tag).state;
+    
+  - platform: template
+    name: "add card"
+    id: add_card
+    optimistic: true
+    min_length: 0
+    max_length: 100
+    mode: text
+    on_value: 
+      then:
+
+        - lambda: |-
+            if (x.length() > 0) {
+
+                store_card_data(x.c_str()) ;
+                estimate_nvs_card_capacity();
+                    
+              }
+            
+  - platform: template
+    name: "remove card"
+    id: remove_card
+    optimistic: true
+    min_length: 0
+    max_length: 100
+    mode: text
+    on_value: 
+      then:
+        - lambda: |-
+            if (x.length() > 0) {
+                  delete_uid(x.c_str());
+            }
+
+
+
+          
+sensor:
+  - platform: uptime
+    name: Alarm uptime
+    update_interval: 10min
+
+logger:
+  baud_rate: 115200
+  level: DEBUG 
+  
+  #logs:
+  #  esp32_ble_pinpad.component: VERBOSE
+
+api:
+  reboot_timeout: 0s
+
+
+ota:
+  - platform: http_request
+  - platform: esphome
+    password: "WONDXLLCDOORMAN"
+
+
+http_request:
+  verify_ssl: false
+  
+
+wifi:
+  networks:
+    - id: WiFi_i2
+      ssid: "iot"
+      password: "Flash2k1" 
+    - id: WiFi_i3
+      ssid: "VOIPEGYPT"
+      password: "04775058"
+
+  reboot_timeout: 0s
+
+
+# Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Doorman1-0-6 Fallback Hotspot"
+    password: "123456789"
+captive_portal:
+  
+
+time:
+
+- platform: ds1307
+  id: sntp_time
+  # repeated synchronization is not necessary unless the external RTC
+  # is much more accurate than the internal clock
+  update_interval: never  
+- platform: homeassistant
+  # instead try to synchronize via network repeatedly ...
+  on_time_sync:
+    then:
+      # ... and update the RTC when the synchronization was successful
+      ds1307.write_time:
+
+#============================ Buzzer =============================================================
+output:
+- platform: ledc
+  pin: GPIO23
+  id: buzzer
+
+rtttl:
+  id: main_rtttl_component
+  output: buzzer
+  on_finished_playback:
+    - logger.log: 'Song ended!'
+
+
+#========================================== Relay Switches =============================================
+switch:
+- platform: template
+  name: "Switch Reassignment Mode"
+  id: programming_switch
+  optimistic: true
+  on_turn_on:
+    then:
+      - globals.set:
+          id: programming_mode
+          value: 'true'
+      - rtttl.play: 'program:d=4,o=5,b=100:c,e,g'
+  on_turn_off:
+    then:
+      - globals.set:
+          id: programming_mode
+          value: 'false'
+      - rtttl.play: 'exit:d=4,o=5,b=100:g,e,c'
+
+- platform: restart
+  name: "Device Restart"  
+  id: reboot_device
+
+
+- platform: factory_reset
+  name: "Factory Reset"
+  id: reset_factory
+
+
+######## relays ########
+- platform: gpio
+  <<: !include { file: relays.yaml, vars: { id: 0 } } 
+- platform: gpio
+  <<: !include { file: relays.yaml, vars: { id: 1 } } 
+- platform: gpio
+  <<: !include { file: relays.yaml, vars: { id: 2 } } 
+- platform: gpio
+  <<: !include { file: relays.yaml, vars: { id: 3 } } 
+- platform: gpio
+  <<: !include { file: relays.yaml, vars: { id: 4 } } 
+- platform: gpio
+  <<: !include { file: relays.yaml, vars: { id: 5 } } 
+- platform: gpio
+  <<: !include { file: relays.yaml, vars: { id: 6 } } 
+- platform: gpio
+  <<: !include { file: relays.yaml, vars: { id: 7 } } 
+
+- platform: gpio
+  name: "Door"
+  pin: 2
+  id: OPTO_1
+  inverted: false
+  on_turn_on:
+  - logger.log: "Switch Turned On!"
+  - rtttl.play: 'siren:d=8,o=2,b=2500:df'
+  - delay: 500ms
+  - switch.turn_off: OPTO_1
+  on_turn_off:
+  - logger.log: "Switch Turned Off!"
+  
+ 
+######## Leds ########
+- <<: !include { file: leds.yaml, vars: { id: 0 } } 
+- <<: !include { file: leds.yaml, vars: { id: 1 } } 
+- <<: !include { file: leds.yaml, vars: { id: 2 } } 
+- <<: !include { file: leds.yaml, vars: { id: 3 } } 
+- <<: !include { file: leds.yaml, vars: { id: 4 } } 
+- <<: !include { file: leds.yaml, vars: { id: 5 } } 
+- <<: !include { file: leds.yaml, vars: { id: 6 } } 
+- <<: !include { file: leds.yaml, vars: { id: 7 } } 
+ 
+
+# #===================================================== BLUE TOOTH SEVER=======================================
+# # Enable Bluetooth Low Energy (BLE)
+
+  # Git-hosted component (esp_littlefs)
+nimble_server: !include nimble_api.yaml
